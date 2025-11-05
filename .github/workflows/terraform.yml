@@ -11,7 +11,8 @@ jobs:
   terraform:
     runs-on: ubuntu-latest
     strategy:
-      matrix:
+      fail-fast: false
+      matrix: 
         dir: [ "service/waf", "service/alb" ]   # 👈 both stacks
     env:
       TF_IN_AUTOMATION: "true"

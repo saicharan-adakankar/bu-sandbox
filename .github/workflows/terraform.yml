@@ -1,4 +1,4 @@
-name: Terraform Deploy
+name: Terraform CI
 
 on:
   push:
@@ -8,73 +8,55 @@ on:
   workflow_dispatch:
 
 jobs:
-  validate_and_plan:
+  terraform:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        dir: [ "service/waf", "service/alb" ]   # 👈 both stacks
     env:
       TF_IN_AUTOMATION: "true"
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-    defaults:
-      run:
-        working-directory: service
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Detect Terraform config
+        id: check
+        run: |
+          if [ -z "$(ls -1 ${{ matrix.dir }}/*.tf 2>/dev/null)" ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "No Terraform files found in ${{ matrix.dir }}, skipping..."
+          fi
+
       - name: Setup Terraform
+        if: steps.check.outputs.skip != 'true'
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.8.0
 
-      - name: Init
+      - name: Terraform Init
+        if: steps.check.outputs.skip != 'true'
+        working-directory: ${{ matrix.dir }}
         run: terraform init -input=false
 
-      - name: Format (check)
+      - name: Terraform Format Check
+        if: steps.check.outputs.skip != 'true'
+        working-directory: ${{ matrix.dir }}
         run: terraform fmt -check
 
-      - name: Validate
+      - name: Terraform Validate
+        if: steps.check.outputs.skip != 'true'
+        working-directory: ${{ matrix.dir }}
         run: terraform validate
 
-      - name: Plan
+      - name: Terraform Plan
+        if: steps.check.outputs.skip != 'true'
+        working-directory: ${{ matrix.dir }}
         run: terraform plan -no-color -out=tfplan
 
-      - name: Upload plan artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: tfplan
-          path: service/tfplan
-
-  apply:
-    needs: validate_and_plan
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    env:
-      TF_IN_AUTOMATION: "true"
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-    defaults:
-      run:
-        working-directory: service
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.8.0
-
-      - name: Init
-        run: terraform init -input=false
-
-      - name: Download plan artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: tfplan
-          path: service
-
-      - name: Apply (main only)
+      - name: Terraform Apply (main branch only)
+        if: steps.check.outputs.skip != 'true' && github.ref == 'refs/heads/main' && github.event_name == 'push'
+        working-directory: ${{ matrix.dir }}
         run: terraform apply -auto-approve tfplan
-        

@@ -1,17 +1,25 @@
-name: Terraform Validation
+name: Terraform Deploy
 
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
 
 jobs:
-  terraform:
+  validate_and_plan:
     runs-on: ubuntu-latest
+    env:
+      TF_IN_AUTOMATION: "true"
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+    defaults:
+      run:
+        working-directory: service
 
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Terraform
@@ -19,14 +27,54 @@ jobs:
         with:
           terraform_version: 1.8.0
 
-      - name: Initialize Terraform
-        working-directory: service
-        run: terraform init
+      - name: Init
+        run: terraform init -input=false
 
-      - name: Validate Terraform
-        working-directory: service
+      - name: Format (check)
+        run: terraform fmt -check
+
+      - name: Validate
         run: terraform validate
 
-      - name: Format check
+      - name: Plan
+        run: terraform plan -no-color -out=tfplan
+
+      - name: Upload plan artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan
+          path: service/tfplan
+
+  apply:
+    needs: validate_and_plan
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    env:
+      TF_IN_AUTOMATION: "true"
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+    defaults:
+      run:
         working-directory: service
-        run: terraform fmt -check
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.8.0
+
+      - name: Init
+        run: terraform init -input=false
+
+      - name: Download plan artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan
+          path: service
+
+      - name: Apply (main only)
+        run: terraform apply -auto-approve tfplan
+        

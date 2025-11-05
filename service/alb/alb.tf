@@ -22,7 +22,7 @@ resource "aws_security_group" "alb_sg" {
 }
 
 resource "aws_lb" "app" {
-  name               = "${var.project_name}"
+  name               = var.project_name
   load_balancer_type = "application"
   subnets            = [aws_subnet.public_a.id, aws_subnet.public_b.id]
   security_groups    = [aws_security_group.alb_sg.id]

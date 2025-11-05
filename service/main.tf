@@ -7,13 +7,13 @@ module "alb_waf" {
 }
 
 # Override the managed rule group behavior directly
-resource "aws_wafv2_web_acl" "charan_waf_override" {
-  name  = "charan-waf-local"
-  scope = "REGIONAL"
+#resource "aws_wafv2_web_acl" "charan_waf_override" {
+#  name  = "charan-waf-local"
+#  scope = "REGIONAL"
 
-  default_action {
-    allow {}
-  }
+# default_action {
+#    allow {}
+#  }
 
   rule {
     name     = "AWSManagedRulesCommonRuleSet"

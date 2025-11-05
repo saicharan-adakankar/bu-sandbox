@@ -5,7 +5,7 @@ locals {
 
 # 1) create the web acl via your existing module
 module "alb_waf" {
-  source = "../modules/waf"
+  source = "../../modules/waf"
 
   cluster_name                      = local.cluster_name
   AWSRateBasedRuleDomesticDOS_limit = 40000
